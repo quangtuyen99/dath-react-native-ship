@@ -16,7 +16,11 @@ import { useFocusEffect } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import OrderCard from "../../../Shared/OrderCard";
 
-import { apiKey, localHost } from "../../../Shared/Constants/constant";
+import {
+  apiKey,
+  localHost,
+  depotLocation,
+} from "../../../Shared/Constants/constant";
 
 import EasyButton from "../../../Shared/StyledComponents/EasyButton";
 const AdPeding = (props) => {
@@ -56,15 +60,30 @@ const AdPeding = (props) => {
   };
 
   const handleShipping = async () => {
-    let arrTimeWindow = [[0, 12]];
+    let arrTimeWindow = [[0, 300]];
     let arrTimeMatrix = [];
     // Tạo mảng thời gian giới hạn của mỗi khách hàng
     orderList.map((item) => {
       let newArr = [];
-      newArr.push(parseInt(item.timeStart) * 60);
-      newArr.push(parseInt(item.timeEnd) * 60);
+
+      let start = item.timeStart.split(":");
+      newArr.push(parseInt(start[0]) * 60 + parseInt(start[1]) - 420);
+
+      let end = item.timeEnd.split(":");
+      newArr.push(parseInt(end[0]) * 60 + parseInt(end[1]) - 420);
       arrTimeWindow.push(newArr);
     });
+
+    let depotLocations = {
+      latitude: depotLocation.latitude,
+      longitude: depotLocation.longitude,
+    };
+
+    Array.prototype.insert = function (index, item) {
+      this.splice(index, 0, item);
+    };
+
+    orderList.insert(0, depotLocation);
 
     for (let i = 0; i < orderList.length; i++) {
       let newArr = [];
@@ -79,7 +98,9 @@ const AdPeding = (props) => {
             `https://maps.googleapis.com/maps/api/directions/json?origin=${orderList[i].latitude}, ${orderList[i].longitude}&destination=${orderList[j].latitude}, ${orderList[j].longitude}&key=${apiKey}`
           )
           .then((res) => {
-            newArr.push(res.data.routes[0].legs[0].duration.value);
+            newArr.push(
+              Math.ceil(res.data.routes[0].legs[0].duration.value / 60)
+            );
           })
           .catch((err) => console.log(err));
       }
@@ -90,21 +111,26 @@ const AdPeding = (props) => {
   };
 
   const getData = async (timeMatrix, timeWindow) => {
+    const data = JSON.stringify({
+      time_matrix: timeMatrix,
+      time_windows: timeWindow,
+      num_vehicles: 4,
+    });
+
+    console.log(data);
+
     await axios
-      .get(`${localHost}coordinate`, {
-        method: "GET",
-        body: {
-          time_matrix: timeMatrix,
-          time_windows: timeWindow,
-        },
+      .post(`${localHost}coordinate`, data, {
         headers: {
           "Content-type": "application/json",
         },
       })
       .then((res) => {
-        console.log(res);
+        console.log(res.data);
       })
-      .catch((err) => console.log(err));
+      .catch((error) => {
+        console.log(error);
+      });
   };
 
   return (

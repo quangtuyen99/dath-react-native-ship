@@ -17,23 +17,21 @@ from ortools.constraint_solver import routing_enums_pb2
 from ortools.constraint_solver import pywrapcp
 import json
 from flask import Flask, jsonify, request
+from flask_cors import CORS
 app = Flask(__name__)
-v0 = []
-v1 = []
-v2 = []
-v3 = []
-
-coordinate1 = {}
+CORS(app)
 coor1 = {}
 coor2 = {}
 coor3 = {}
 coor4 = {}
+coordinate = {}
 
 
 def create_data_model():
     """Stores the data for the problem."""
     data = {}
     req_data = request.get_json()
+    print(request)
     data['time_matrix'] = req_data['time_matrix']
 
     time_window = req_data['time_windows']
@@ -44,7 +42,7 @@ def create_data_model():
 
     data['time_windows'] = arr_time_window
 
-    data['num_vehicles'] = 4
+    data['num_vehicles'] = req_data['num_vehicles']
     data['depot'] = 0
     return data
 
@@ -56,29 +54,20 @@ def print_solution(data, manager, routing, solution):
     for vehicle_id in range(data['num_vehicles']):
         index = routing.Start(vehicle_id)
         plan_output = 'Route for vehicle {}:\n'.format(vehicle_id)
+
+        arr = {}
         while not routing.IsEnd(index):
+
             time_var = time_dimension.CumulVar(index)
+
+            # Create item in array
+            my_dict = {"location": manager.IndexToNode(index), "timePredict": solution.Min(
+                time_var), "timeEnd": solution.Max(time_var)}
+            arr[len(arr) + 1] = my_dict
+
             plan_output += '{0} Time({1},{2}) -> '.format(
                 manager.IndexToNode(index), solution.Min(time_var),
                 solution.Max(time_var))
-
-            if vehicle_id == 0:
-                my_dict = {"location": manager.IndexToNode(index), "time1": solution.Min(
-                    time_var), "time2": solution.Max(time_var)}
-                coor1[len(coor1) + 1] = my_dict
-
-            if vehicle_id == 1:
-                my_dict = {"location": manager.IndexToNode(index), "time1": solution.Min(
-                    time_var), "time2": solution.Max(time_var)}
-                coor2[len(coor2) + 1] = my_dict
-            if vehicle_id == 2:
-                my_dict = {"location": manager.IndexToNode(index), "time1": solution.Min(
-                    time_var), "time2": solution.Max(time_var)}
-                coor3[len(coor3) + 1] = my_dict
-            if vehicle_id == 3:
-                my_dict = {"location": manager.IndexToNode(index), "time1": solution.Min(
-                    time_var), "time2": solution.Max(time_var)}
-                coor4[len(coor4) + 1] = my_dict
 
             index = solution.Value(routing.NextVar(index))
         time_var = time_dimension.CumulVar(index)
@@ -89,10 +78,12 @@ def print_solution(data, manager, routing, solution):
             solution.Min(time_var))
         # print(plan_output)
         total_time += solution.Min(time_var)
+
+        coordinate["{0}".format(vehicle_id)] = arr
     # print('Total time of all routes: {}min'.format(total_time))
 
 
-@app.route("/coordinate")
+@app.route("/coordinate", methods=['POST'])
 def main():
     """Solve the VRP with time windows."""
     # Instantiate the data problem.
@@ -124,7 +115,7 @@ def main():
     routing.AddDimension(
         transit_callback_index,
         30,  # allow waiting time
-        30,  # maximum time per vehicle
+        300,  # maximum time per vehicle
         False,  # Don't force start cumul to zero.
         time)
     time_dimension = routing.GetDimensionOrDie(time)
@@ -161,12 +152,6 @@ def main():
     if solution:
         print_solution(data, manager, routing, solution)
 
-    coordinate = {
-        "1": coor1,
-        "2": coor2,
-        "3": coor3,
-        "4": coor4
-    }
     return coordinate
     # print(coor1)
     # print(v0)
